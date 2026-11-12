@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Esnaf Kasa",
+    "slug": "esnaf-kasa",
+    "version": "1.0.0",
+    "sdkVersion": "54.0.0",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "android": {
+      "package": "com.toco.esnafkasa"
+    }
+  }
+}
