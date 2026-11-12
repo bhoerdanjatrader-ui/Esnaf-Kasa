@@ -4,6 +4,7 @@
     "slug": "patron",
     "version": "1.0.0",
     "nodeVersion": "20.19.4",
+    "owner": "bhoers-team",
     "platforms": [
       "ios",
       "android"
