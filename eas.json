@@ -8,13 +8,13 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk",
-        "gradleCommand": "assembleRelease -Pkotlin.version=1.9.25"
+        "gradleCommand": "assembleRelease -Pkotlin.version=1.9.25 -Pexpo.suppressKotlinVersionCompatibilityCheck=true"
       }
     },
     "production": {
       "android": {
         "buildType": "apk",
-        "gradleCommand": "assembleRelease -Pkotlin.version=1.9.25"
+        "gradleCommand": "assembleRelease -Pkotlin.version=1.9.25 -Pexpo.suppressKotlinVersionCompatibilityCheck=true"
       }
     }
   }
