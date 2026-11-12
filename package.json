@@ -20,5 +20,8 @@
   "devDependencies": {
     "@babel/core": "^7.25.2"
   },
+  "resolutions": {
+    "kotlin": "1.9.24"
+  },
   "private": true
 }
