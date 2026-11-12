@@ -1,276 +1,439 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, SafeAreaView, Linking } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-
-// Dil Sözlüğü
-const translations = {
-  tr: {
-    title: "PATRON",
-    subtitle: "Bırak Patron Düşünsün",
-    totalReceivable: "Alacaklı Olduğumuz",
-    totalPayable: "Borçlu Olduğumuz",
-    namePlaceholder: "Müşteri / Firma Adı",
-    amountPlaceholder: "Tutar (TL)",
-    phonePlaceholder: "Telefon (Örn: 90532...)",
-    customerDebt: "Müşteri Borcu (Alacak)",
-    companyDebt: "Bize Borç (Verecek)",
-    addButton: "Kayıt Ekle",
-    listTitle: "Güncel Cari Hesaplar",
-    whatsapp: "WhatsApp",
-    delete: "Sil",
-    empty: "Henüz kayıt eklenmedi.",
-    premiumBanner: "⭐ Patron Premium: Sınırsız Sınıf ve Raporlama (49.99 TL/Ay)",
-    switchLang: "English",
-  },
-  en: {
-    title: "PATRON",
-    subtitle: "Let the Boss Think",
-    totalReceivable: "Total Receivable",
-    totalPayable: "Total Payable",
-    namePlaceholder: "Customer / Company Name",
-    amountPlaceholder: "Amount (TL)",
-    phonePlaceholder: "Phone (Ex: 90532...)",
-    customerDebt: "Customer Debt",
-    companyDebt: "Our Debt",
-    addButton: "Add Record",
-    listTitle: "Current Accounts",
-    whatsapp: "WhatsApp",
-    delete: "Delete",
-    empty: "No records added yet.",
-    premiumBanner: "⭐ Patron Premium: Unlimited & Reports (49.99 TL/Mo)",
-    switchLang: "Türkçe",
-  }
-};
+import React, { useState, useEffect } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  SafeAreaView,
+  StatusBar,
+  Alert,
+  Modal
+} from 'react-native';
 
 export default function App() {
-  const [lang, setLang] = useState(null); // 'tr' veya 'en' (null ise dil seçim ekranı gelir)
-  const [customers, setCustomers] = useState([]);
-  const [name, setName] = useState('');
-  const [amount, setAmount] = useState('');
-  const [phone, setPhone] = useState('');
-  const [type, setType] = useState('borc');
+  const [lang, setLang] = useState('tr'); // 'tr' veya 'en'
+  const [activeTab, setActiveTab] = useState('kasa'); // 'kasa', 'portfoy', 'talepler', 'eslesme'
 
-  const t = translations[lang] || translations.tr;
+  // Kasa State'leri
+  const [bakiye, setBakiye] = useState(12500);
+  const [islemTipi, setIslemTipi] = useState('gelir');
+  const [tutar, setTutar] = useState('');
+  const [aciklama, setAciklama] = useState('');
+  const [islemGecmisi, setIslemGecmisi] = useState([
+    { id: '1', tip: 'gelir', tutar: 15000, aciklama: 'Satış Komisyonu - Villa', tarih: '10.11.2026' },
+    { id: '2', tip: 'gider', tutar: 2500, aciklama: 'Ofis Kirası', tarih: '01.11.2026' },
+  ]);
 
-  const totalReceivable = customers
-    .filter(c => c.type === 'borc')
-    .reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
+  // Portföy State'leri
+  const [portfoyler, setPortfoyler] = useState([
+    { id: '1', baslik: 'Ören 3+1 Daire', tip: 'Satılık', fiyat: 3200000, konum: 'Burhaniye/Ören', aciklama: 'Denize sıfır, kombili, önü kapanmaz manzaralı.' },
+    { id: '2', baslik: 'Bahçelievler Villa', tip: 'Kiralık', fiyat: 25000, konum: 'Burhaniye Merkez', aciklama: 'Müstakil bahçeli, eşyalı lüks villa.' }
+  ]);
+  const [pBaslik, setPBaslik] = useState('');
+  const [pTip, setPTip] = useState('Satılık');
+  const [pFiyat, setPFiyat] = useState('');
+  const [pKonum, setPKonum] = useState('');
+  const [pAciklama, setPAciklama] = useState('');
 
-  const totalPayable = customers
-    .filter(c => c.type === 'alacak')
-    .reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
+  // Talep State'leri (Alıcı/Kiralayıcı Talepleri)
+  const [talepler, setTalepler] = useState([
+    { id: '1', musteri: 'Ahmet Bey', tip: 'Satılık', maxFiyat: 3500000, aranan: '3+1 Daire', konum: 'Ören' }
+  ]);
+  const [tMusteri, setTMusteri] = useState('');
+  const [tTip, setTTip] = useState('Satılık');
+  const [tMaxFiyat, setTMaxFiyat] = useState('');
+  const [tAranan, setTAranan] = useState('');
+  const [tKonum, setTKonum] = useState('');
 
-  const addCustomer = () => {
-    if (!name.trim() || !amount.trim()) return;
-    const newCustomer = {
+  // Eşleşme Bildirimleri
+  const [bildirimler, setBildirimler] = useState([]);
+
+  // Dil Metinleri
+  const t = {
+    tr: {
+      title: 'Patron | Esnaf & Emlak Kasa',
+      kasa: 'Kasa',
+      portfoy: 'Portföy',
+      talepler: 'Talepler',
+      eslesme: 'Eşleşmeler',
+      bakiye: 'Kasa Bakiyesi',
+      yeniIslem: 'Gelir / Gider Ekle',
+      tutar: 'Tutar (TL)',
+      islemAciklama: 'İşlem Açıklaması',
+      kaydet: 'Kaydet',
+      gelir: 'Gelir',
+      gider: 'Gider',
+      gecmis: 'İşlem Geçmişi',
+      portfoyEkle: 'Yeni Portföy Ekle',
+      pBaslik: 'Portföy Başlığı (Örn: Ören Daire)',
+      pTip: 'Tür (Satılık/Kiralık)',
+      pFiyat: 'Fiyat (TL)',
+      pKonum: 'Konum',
+      pAciklama: 'Portföy Detay Açıklaması',
+      talepEkle: 'Müşteri Talebi Ekle',
+      tMusteri: 'Müşteri Adı Soyadı',
+      tMaxFiyat: 'Maksimum Bütçe (TL)',
+      tAranan: 'Aranan Özellik / Gayrimenkul',
+      tKonum: 'İstenilen Bölge',
+      eslesmeBaslik: 'Portföy - Talep Eşleşmeleri',
+      bildirimYok: 'Şu an aktif eşleşen portföy bulunmuyor.'
+    },
+    en: {
+      title: 'Patron | Broker & Cashier',
+      kasa: 'Cashier',
+      portfoy: 'Portfolio',
+      talepler: 'Requests',
+      eslesme: 'Matches',
+      bakiye: 'Current Balance',
+      yeniIslem: 'Add Income / Expense',
+      tutar: 'Amount (TL)',
+      islemAciklama: 'Transaction Description',
+      kaydet: 'Save',
+      gelir: 'Income',
+      gider: 'Expense',
+      gecmis: 'Transaction History',
+      portfoyEkle: 'Add New Portfolio',
+      pBaslik: 'Title (e.g. Oren Apartment)',
+      pTip: 'Type (Sale/Rent)',
+      pFiyat: 'Price (TL)',
+      pKonum: 'Location',
+      pAciklama: 'Detailed Description',
+      talepEkle: 'Add Client Request',
+      tMusteri: 'Client Name',
+      tMaxFiyat: 'Max Budget (TL)',
+      tAranan: 'Desired Property Type',
+      tKonum: 'Target Location',
+      eslesmeBaslik: 'Portfolio & Request Matches',
+      bildirimYok: 'No matching portfolios found at the moment.'
+    }
+  };
+
+  const text = t[lang];
+
+  // Portföy ve Talepleri Otomatik Eşleştirme Kontrolü
+  useEffect(() => {
+    let yeniEslesmeler = [];
+    portfoyler.forEach(portfoy => {
+      talepler.forEach(talep => {
+        // Tip uyuşuyorsa, fiyat bütçenin altında/eşitse ve konum eşleşiyorsa bildirim üret
+        const fiyatUygun = portfoy.fiyat <= Number(talep.maxFiyat);
+        const tipUygun = portfoy.tip.toLowerCase() === talep.tip.toLowerCase();
+        const konumUygun = portfoy.konum.toLowerCase().includes(talep.konum.toLowerCase());
+
+        if (fiyatUygun && tipUygun && konumUygun) {
+          yeniEslesmeler.push({
+            id: `${portfoy.id}-${talep.id}`,
+            mesaj: `🎯 Eşleşme Bulundu! ${talep.musteri} adlı müşterinin talebi (${talep.aranan} - max ${talep.maxFiyat} TL) ile "${portfoy.baslik}" (${portfoy.fiyat} TL) portföyü uyuşuyor!`
+          });
+        }
+      });
+    });
+    setBildirimler(yeniEslesmeler);
+  }, [portfoyler, talepler]);
+
+  // Kasa İşlemi Ekle
+  const islemEkle = () => {
+    if (!tutar || !aciklama) {
+      Alert.alert('Hata', 'Lütfen tutar ve açıklama giriniz.');
+      return;
+    }
+    const sayiTutar = Number(tutar);
+    const yeniBakiye = islemTipi === 'gelir' ? bakiye + sayiTutar : bakiye - sayiTutar;
+    setBakiye(yeniBakiye);
+
+    const yeniIslemObj = {
       id: Date.now().toString(),
-      name,
-      amount: parseFloat(amount),
-      phone,
-      type,
+      tip: islemTipi,
+      tutar: sayiTutar,
+      aciklama: aciklama,
+      tarih: new Date().toLocaleDateString('tr-TR')
     };
-    setCustomers([newCustomer, ...customers]);
-    setName('');
-    setAmount('');
-    setPhone('');
+
+    setIslemGecmisi([yeniIslemObj, ...islemGecmisi]);
+    setTutar('');
+    setAciklama('');
+    Alert.alert('Başarılı', 'İşlem kasaya işlendi.');
   };
 
-  const deleteCustomer = (id) => {
-    setCustomers(customers.filter(c => c.id !== id));
+  // Portföy Ekle
+  const portfoyEkle = () => {
+    if (!pBaslik || !pFiyat || !pKonum) {
+      Alert.alert('Hata', 'Başlık, fiyat ve konum alanları zorunludur.');
+      return;
+    }
+    const yeniP = {
+      id: Date.now().toString(),
+      baslik: pBaslik,
+      tip: pTip,
+      fiyat: Number(pFiyat),
+      konum: pKonum,
+      aciklama: pAciklama
+    };
+    setPortfoyler([yeniP, ...portfoyler]);
+    setPBaslik('');
+    setPFiyat('');
+    setPKonum('');
+    setPAciklama('');
+    Alert.alert('Başarılı', 'Portföy başarıyla eklendi ve eşleşmeler tarandı!');
   };
 
-  const sendWhatsApp = (customer) => {
-    if (!customer.phone) return;
-    const message = lang === 'en' 
-      ? `Dear ${customer.name}, according to Patron records, you have a balance of ${customer.amount} TL. Best regards.`
-      : `Sayın ${customer.name}, Patron kayıtlarımıza göre ${customer.amount} TL bakiye borcunuz bulunmaktadır. Bilgilerinize sunarız.`;
-    const url = `whatsapp://send?phone=${customer.phone}&text=${encodeURIComponent(message)}`;
-    Linking.openURL(url).catch(() => alert('WhatsApp error'));
+  // Talep Ekle
+  const talepEkle = () => {
+    if (!tMusteri || !tMaxFiyat || !tKonum) {
+      Alert.alert('Hata', 'Müşteri adı, maksimum bütçe ve bölge zorunludur.');
+      return;
+    }
+    const yeniT = {
+      id: Date.now().toString(),
+      musteri: tMusteri,
+      tip: tTip,
+      maxFiyat: Number(tMaxFiyat),
+      aranan: tAranan,
+      konum: tKonum
+    };
+    setTalepler([yeniT, ...talepler]);
+    setTMusteri('');
+    setTMaxFiyat('');
+    setTAranan('');
+    setTKonum('');
+    Alert.alert('Başarılı', 'Talep eklendi ve uygun portföylerle eşleştirildi!');
   };
 
-  // 1. AŞAMA: Dil Seçim Ekranı (Splash / Welcome Screen)
-  if (!lang) {
-    return (
-      <SafeAreaView style={styles.welcomeContainer}>
-        <StatusBar style="light" />
-        <View style={styles.welcomeCard}>
-          <Text style={styles.welcomeLogo}>💼 PATRON</Text>
-          <Text style={styles.welcomeSlogan}>Bırak Patron Düşünsün / Let the Boss Think</Text>
-          <Text style={styles.welcomeDesc}>Lütfen uygulama dilini seçiniz / Please select language</Text>
-          
-          <TouchableOpacity style={styles.langButton} onPress={() => setLang('tr')}>
-            <Text style={styles.langButtonText}>🇹🇷 Türkçe</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.langButton} onPress={() => setLang('en')}>
-            <Text style={styles.langButtonText}>🇬🇧 English</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // 2. AŞAMA: Ana Uygulama Ekranı
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
+      <StatusBar barStyle="light-content" backgroundColor="#1e293b" />
       
-      {/* Üst Başlık ve Dil Değiştirme */}
+      {/* Üst Başlık ve Dil Seçimi */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>💼 {t.title}</Text>
-          <Text style={styles.headerSubtitle}>{t.subtitle}</Text>
-        </View>
-        <TouchableOpacity style={styles.langSwitch} onPress={() => setLang(lang === 'tr' ? 'en' : 'tr')}>
-          <Text style={styles.langSwitchText}>{t.switchLang}</Text>
+        <Text style={styles.headerTitle}>{text.title}</Text>
+        <TouchableOpacity style={styles.langBtn} onPress={() => setLang(lang === 'tr' ? 'en' : 'tr')}>
+          <Text style={styles.langText}>{lang === 'tr' ? 'EN 🇬🇧' : 'TR 🇹🇷'}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Premium Abonelik Bilgilendirme Banneri (49.99 TL) */}
-      <View style={styles.premiumBanner}>
-        <Text style={styles.premiumText}>{t.premiumBanner}</Text>
-      </View>
-
-      {/* Özet Kartları */}
-      <View style={styles.summaryContainer}>
-        <View style={[styles.card, styles.cardRed]}>
-          <Text style={styles.cardTitle}>{t.totalReceivable}</Text>
-          <Text style={styles.cardAmount}>{totalReceivable.toFixed(2)} TL</Text>
-        </View>
-        <View style={[styles.card, styles.cardGreen]}>
-          <Text style={styles.cardTitle}>{t.totalPayable}</Text>
-          <Text style={styles.cardAmount}>{totalPayable.toFixed(2)} TL</Text>
-        </View>
-      </View>
-
-      {/* Veri Giriş Formu */}
-      <View style={styles.form}>
-        <TextInput
-          style={styles.input}
-          placeholder={t.namePlaceholder}
-          placeholderTextColor="#888"
-          value={name}
-          onChangeText={setName}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder={t.amountPlaceholder}
-          placeholderTextColor="#888"
-          keyboardType="numeric"
-          value={amount}
-          onChangeText={setAmount}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder={t.phonePlaceholder}
-          placeholderTextColor="#888"
-          keyboardType="phone-pad"
-          value={phone}
-          onChangeText={setPhone}
-        />
-
-        <View style={styles.typeSelector}>
-          <TouchableOpacity
-            style={[styles.typeButton, type === 'borc' && styles.activeBorc]}
-            onPress={() => setType('borc')}
-          >
-            <Text style={[styles.typeText, type === 'borc' && styles.activeText]}>{t.customerDebt}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.typeButton, type === 'alacak' && styles.activeAlacak]}
-            onPress={() => setType('alacak')}
-          >
-            <Text style={[styles.typeText, type === 'alacak' && styles.activeText]}>{t.companyDebt}</Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity style={styles.addButton} onPress={addCustomer}>
-          <Text style={styles.addButtonText}>{t.addButton}</Text>
+      {/* Sekmeler / Menü */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity style={[styles.tab, activeTab === 'kasa' && styles.activeTab]} onPress={() => setActiveTab('kasa')}>
+          <Text style={[styles.tabText, activeTab === 'kasa' && styles.activeTabText]}>{text.kasa}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tab, activeTab === 'portfoy' && styles.activeTab]} onPress={() => setActiveTab('portfoy')}>
+          <Text style={[styles.tabText, activeTab === 'portfoy' && styles.activeTabText]}>{text.portfoy}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tab, activeTab === 'talepler' && styles.activeTab]} onPress={() => setActiveTab('talepler')}>
+          <Text style={[styles.tabText, activeTab === 'talepler' && styles.activeTabText]}>{text.talepler}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tab, activeTab === 'eslesme' && styles.activeTab]} onPress={() => setActiveTab('eslesme')}>
+          <Text style={[styles.tabText, activeTab === 'eslesme' && styles.activeTabText]}>
+            {text.eslesme} {bildirimler.length > 0 ? `(${bildirimler.length})` : ''}
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Liste */}
-      <View style={styles.listContainer}>
-        <Text style={styles.listTitle}>{t.listTitle}</Text>
-        <FlatList
-          data={customers}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={[styles.itemCard, item.type === 'borc' ? styles.borderRed : styles.borderGreen]}>
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemPhone}>{item.phone || '-'}</Text>
-                <Text style={[styles.itemAmount, item.type === 'borc' ? styles.textRed : styles.textGreen]}>
-                  {item.amount} TL
-                </Text>
-              </View>
-              <View style={styles.itemActions}>
-                {item.phone ? (
-                  <TouchableOpacity style={styles.waButton} onPress={() => sendWhatsApp(item)}>
-                    <Text style={styles.waButtonText}>{t.whatsapp}</Text>
-                  </TouchableOpacity>
-                ) : null}
-                <TouchableOpacity style={styles.deleteButton} onPress={() => deleteCustomer(item.id)}>
-                  <Text style={styles.deleteButtonText}>{t.delete}</Text>
+      <ScrollView contentContainerStyle={styles.content}>
+        
+        {/* KASA SEKMESİ */}
+        {activeTab === 'kasa' && (
+          <View>
+            <View style={styles.bakiyeCard}>
+              <Text style={styles.bakiyeLabel}>{text.bakiye}</Text>
+              <Text style={styles.bakiyeValue}>{bakiye.toLocaleString()} TL</Text>
+            </View>
+
+            <View style={styles.formCard}>
+              <Text style={styles.cardTitle}>{text.yeniIslem}</Text>
+              <View style={styles.tipRow}>
+                <TouchableOpacity 
+                  style={[styles.tipBtn, islemTipi === 'gelir' && styles.gelirActive]} 
+                  onPress={() => setIslemTipi('gelir')}
+                >
+                  <Text style={styles.tipText}>{text.gelir}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.tipBtn, islemTipi === 'gider' && styles.giderActive]} 
+                  onPress={() => setIslemTipi('gider')}
+                >
+                  <Text style={styles.tipText}>{text.gider}</Text>
                 </TouchableOpacity>
               </View>
+
+              <TextInput
+                style={styles.input}
+                placeholder={text.tutar}
+                placeholderTextColor="#94a3b8"
+                keyboardType="numeric"
+                value={tutar}
+                onChangeText={setTutar}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder={text.islemAciklama}
+                placeholderTextColor="#94a3b8"
+                value={aciklama}
+                onChangeText={setAciklama}
+              />
+              <TouchableOpacity style={styles.saveBtn} onPress={islemEkle}>
+                <Text style={styles.saveBtnText}>{text.kaydet}</Text>
+              </TouchableOpacity>
             </View>
-          )}
-          ListEmptyComponent={<Text style={styles.emptyText}>{t.empty}</Text>}
-        />
-      </View>
+
+            <Text style={styles.sectionTitle}>{text.gecmis}</Text>
+            {islemGecmisi.map(item => (
+              <View key={item.id} style={styles.historyItem}>
+                <View>
+                  <Text style={styles.historyDesc}>{item.aciklama}</Text>
+                  <Text style={styles.historyDate}>{item.tarih}</Text>
+                </View>
+                <Text style={[styles.historyAmount, item.tip === 'gelir' ? styles.textGelir : styles.textGider]}>
+                  {item.tip === 'gelir' ? '+' : '-'}{item.tutar.toLocaleString()} TL
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* PORTFÖY SEKMESİ */}
+        {activeTab === 'portfoy' && (
+          <View>
+            <View style={styles.formCard}>
+              <Text style={styles.cardTitle}>{text.portfoyEkle}</Text>
+              <TextInput style={styles.input} placeholder={text.pBaslik} placeholderTextColor="#94a3b8" value={pBaslik} onChangeText={setPBaslik} />
+              
+              <View style={styles.tipRow}>
+                <TouchableOpacity style={[styles.tipBtn, pTip === 'Satılık' && styles.gelirActive]} onPress={() => setPTip('Satılık')}>
+                  <Text style={styles.tipText}>Satılık</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.tipBtn, pTip === 'Kiralık' && styles.giderActive]} onPress={() => setPTip('Kiralık')}>
+                  <Text style={styles.tipText}>Kiralık</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TextInput style={styles.input} placeholder={text.pFiyat} placeholderTextColor="#94a3b8" keyboardType="numeric" value={pFiyat} onChangeText={setPFiyat} />
+              <TextInput style={styles.input} placeholder={text.pKonum} placeholderTextColor="#94a3b8" value={pKonum} onChangeText={setPKonum} />
+              <TextInput style={[styles.input, { height: 70 }]} placeholder={text.pAciklama} placeholderTextColor="#94a3b8" multiline value={pAciklama} onChangeText={setPAciklama} />
+              
+              <TouchableOpacity style={styles.saveBtn} onPress={portfoyEkle}>
+                <Text style={styles.saveBtnText}>{text.kaydet}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.sectionTitle}>Aktif Portföyler ({portfoyler.length})</Text>
+            {portfoyler.map(p => (
+              <View key={p.id} style={styles.listItem}>
+                <View style={styles.listHeader}>
+                  <Text style={styles.listTitle}>{p.baslik}</Text>
+                  <Text style={styles.listBadge}>{p.tip}</Text>
+                </View>
+                <Text style={styles.listSub}>📍 {p.konum} | 💰 {p.fiyat.toLocaleString()} TL</Text>
+                {p.aciklama ? <Text style={styles.listDesc}>{p.aciklama}</Text> : null}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* TALEPLER SEKMESİ */}
+        {activeTab === 'talepler' && (
+          <View>
+            <View style={styles.formCard}>
+              <Text style={styles.cardTitle}>{text.talepEkle}</Text>
+              <TextInput style={styles.input} placeholder={text.tMusteri} placeholderTextColor="#94a3b8" value={tMusteri} onChangeText={setTMusteri} />
+              
+              <View style={styles.tipRow}>
+                <TouchableOpacity style={[styles.tipBtn, tTip === 'Satılık' && styles.gelirActive]} onPress={() => setTTip('Satılık')}>
+                  <Text style={styles.tipText}>Satılık</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.tipBtn, tTip === 'Kiralık' && styles.giderActive]} onPress={() => setTTip('Kiralık')}>
+                  <Text style={styles.tipText}>Kiralık</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TextInput style={styles.input} placeholder={text.tMaxFiyat} placeholderTextColor="#94a3b8" keyboardType="numeric" value={tMaxFiyat} onChangeText={setTMaxFiyat} />
+              <TextInput style={styles.input} placeholder={text.tAranan} placeholderTextColor="#94a3b8" value={tAranan} onChangeText={setTAranan} />
+              <TextInput style={styles.input} placeholder={text.tKonum} placeholderTextColor="#94a3b8" value={tKonum} onChangeText={setTKonum} />
+
+              <TouchableOpacity style={styles.saveBtn} onPress={talepEkle}>
+                <Text style={styles.saveBtnText}>{text.kaydet}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.sectionTitle}>Müşteri Talepleri ({talepler.length})</Text>
+            {talepler.map(talep => (
+              <View key={talep.id} style={styles.listItem}>
+                <View style={styles.listHeader}>
+                  <Text style={styles.listTitle}>{talep.musteri}</Text>
+                  <Text style={styles.listBadge}>{talep.tip}</Text>
+                </View>
+                <Text style={styles.listSub}>🔍 {talep.aranan} | 📍 {talep.konum}</Text>
+                <Text style={styles.listDesc}>Max Bütçe: {talep.maxFiyat.toLocaleString()} TL</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* EŞLEŞMELER SEKMESİ */}
+        {activeTab === 'eslesme' && (
+          <View>
+            <Text style={styles.sectionTitle}>{text.eslesmeBaslik}</Text>
+            {bildirimler.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>{text.bildirimYok}</Text>
+              </View>
+            ) : (
+              bildirimler.map(b => (
+                <View key={b.id} style={styles.alertCard}>
+                  <Text style={styles.alertText}>{b.mesaj}</Text>
+                </View>
+              ))
+            )}
+          </View>
+        )}
+
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  welcomeContainer: { flex: 1, backgroundColor: '#0f172a', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  welcomeCard: { width: '100%', maxWidth: 350, backgroundColor: '#1e293b', padding: 25, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: '#334155' },
-  welcomeLogo: { fontSize: 32, fontWeight: 'bold', color: '#38bdf8', marginBottom: 10 },
-  welcomeSlogan: { fontSize: 13, color: '#fbbf24', textAlign: 'center', marginBottom: 15, fontStyle: 'italic' },
-  welcomeDesc: { fontSize: 12, color: '#94a3b8', textAlign: 'center', marginBottom: 25 },
-  langButton: { width: '100%', backgroundColor: '#0284c7', padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 12 },
-  langButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-
-  container: { flex: 1, backgroundColor: '#0f172a', padding: 15 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 10 },
-  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#f8fafc' },
-  headerSubtitle: { fontSize: 11, color: '#fbbf24', fontStyle: 'italic' },
-  langSwitch: { backgroundColor: '#334155', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8 },
-  langSwitchText: { color: '#38bdf8', fontSize: 12, fontWeight: 'bold' },
-  premiumBanner: { backgroundColor: '#422006', padding: 8, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: '#b45309', alignItems: 'center' },
-  premiumText: { color: '#fde047', fontSize: 11, fontWeight: 'bold' },
-  summaryContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  card: { flex: 1, padding: 10, borderRadius: 10, alignItems: 'center', marginHorizontal: 4 },
-  cardRed: { backgroundColor: '#450a0a' },
-  cardGreen: { backgroundColor: '#052e16' },
-  cardTitle: { fontSize: 11, color: '#cbd5e1', marginBottom: 4 },
-  cardAmount: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
-  form: { backgroundColor: '#1e293b', padding: 12, borderRadius: 10, marginBottom: 12 },
-  input: { backgroundColor: '#0f172a', color: '#fff', padding: 10, borderRadius: 8, marginBottom: 8, fontSize: 13, borderWidth: 1, borderColor: '#334155' },
-  typeSelector: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  typeButton: { flex: 1, padding: 8, alignItems: 'center', borderRadius: 6, backgroundColor: '#0f172a', marginHorizontal: 2, borderWidth: 1, borderColor: '#334155' },
-  activeBorc: { backgroundColor: '#991b1b', borderColor: '#f87171' },
-  activeAlacak: { backgroundColor: '#166534', borderColor: '#4ade80' },
-  typeText: { color: '#94a3b8', fontSize: 10, fontWeight: 'bold' },
-  activeText: { color: '#fff' },
-  addButton: { backgroundColor: '#0284c7', padding: 12, borderRadius: 8, alignItems: 'center' },
-  addButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
-  listContainer: { flex: 1 },
-  listTitle: { color: '#f8fafc', fontSize: 14, fontWeight: 'bold', marginBottom: 8 },
-  itemCard: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#1e293b', padding: 10, borderRadius: 8, marginBottom: 6, borderLeftWidth: 4 },
-  borderRed: { borderLeftColor: '#ef4444' },
-  borderGreen: { borderLeftColor: '#22c55e' },
-  itemInfo: { flex: 1 },
-  itemName: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-  itemPhone: { color: '#94a3b8', fontSize: 11, marginVertical: 1 },
-  itemAmount: { fontSize: 13, fontWeight: 'bold', marginTop: 2 },
-  textRed: { color: '#ef4444' },
-  textGreen: { color: '#22c55e' },
-  itemActions: { justifyContent: 'center', alignItems: 'flex-end' },
-  waButton: { backgroundColor: '#16a34a', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 4, marginBottom: 4 },
-  waButtonText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
-  deleteButton: { backgroundColor: '#dc2626', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 4 },
-  deleteButtonText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
-  emptyText: { color: '#64748b', textAlign: 'center', marginTop: 15, fontSize: 12 }
+  container: { flex: 1, backgroundColor: '#0f172a' },
+  header: { backgroundColor: '#1e293b', padding: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerTitle: { color: '#f8fafc', fontSize: 18, fontWeight: 'bold' },
+  langBtn: { backgroundColor: '#334155', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  langText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  tabContainer: { flexDirection: 'row', backgroundColor: '#1e293b', borderBottomWidth: 1, borderBottomColor: '#334155' },
+  tab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
+  activeTab: { borderBottomWidth: 3, borderBottomColor: '#38bdf8' },
+  tabText: { color: '#94a3b8', fontSize: 13, fontWeight: '600' },
+  activeTabText: { color: '#38bdf8' },
+  content: { padding: 15 },
+  bakiyeCard: { backgroundColor: '#0284c7', padding: 20, borderRadius: 12, alignItems: 'center', marginBottom: 15 },
+  bakiyeLabel: { color: '#e0f2fe', fontSize: 14, fontWeight: '600' },
+  bakiyeValue: { color: '#fff', fontSize: 26, fontWeight: 'bold', marginTop: 5 },
+  formCard: { backgroundColor: '#1e293b', padding: 15, borderRadius: 12, marginBottom: 20 },
+  cardTitle: { color: '#f8fafc', fontSize: 16, fontWeight: 'bold', marginBottom: 12 },
+  tipRow: { flexDirection: 'row', marginBottom: 12 },
+  tipBtn: { flex: 1, padding: 10, backgroundColor: '#334155', alignItems: 'center', borderRadius: 8, marginHorizontal: 4 },
+  gelirActive: { backgroundColor: '#16a34a' },
+  giderActive: { backgroundColor: '#dc2626' },
+  tipText: { color: '#fff', fontWeight: 'bold' },
+  input: { backgroundColor: '#0f172a', color: '#fff', padding: 12, borderRadius: 8, marginBottom: 10, borderWidth: 1, borderColor: '#334155' },
+  saveBtn: { backgroundColor: '#0284c7', padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 5 },
+  saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  sectionTitle: { color: '#f8fafc', fontSize: 16, fontWeight: 'bold', marginBottom: 10, marginTop: 5 },
+  historyItem: { backgroundColor: '#1e293b', padding: 12, borderRadius: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  historyDesc: { color: '#f8fafc', fontWeight: '600', fontSize: 14 },
+  historyDate: { color: '#94a3b8', fontSize: 12, marginTop: 2 },
+  historyAmount: { fontSize: 15, fontWeight: 'bold' },
+  textGelir: { color: '#4ade80' },
+  textGider: { color: '#f87171' },
+  listItem: { backgroundColor: '#1e293b', padding: 15, borderRadius: 10, marginBottom: 10, borderWidth: 1, borderColor: '#334155' },
+  listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
+  listTitle: { color: '#f8fafc', fontSize: 15, fontWeight: 'bold' },
+  listBadge: { backgroundColor: '#0369a1', color: '#fff', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, fontSize: 11, fontWeight: 'bold' },
+  listSub: { color: '#38bdf8', fontSize: 13, marginBottom: 4 },
+  listDesc: { color: '#94a3b8', fontSize: 13, marginTop: 4, fontStyle: 'italic' },
+  emptyCard: { backgroundColor: '#1e293b', padding: 25, borderRadius: 10, alignItems: 'center' },
+  emptyText: { color: '#94a3b8', textAlign: 'center' },
+  alertCard: { backgroundColor: '#065f46', padding: 15, borderRadius: 10, marginBottom: 10, borderWidth: 1, borderColor: '#047857' },
+  alertText: { color: '#d1fae5', fontSize: 14, fontWeight: '600', lineHeight: 20 }
 });
