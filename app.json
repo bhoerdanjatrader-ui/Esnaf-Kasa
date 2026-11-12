@@ -3,7 +3,6 @@
     "name": "Patron",
     "slug": "patron",
     "version": "1.0.0",
-    "sdkVersion": "54.0.0",
     "nodeVersion": "20.19.4",
     "platforms": [
       "ios",
