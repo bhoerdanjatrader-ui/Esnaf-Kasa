@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Esnaf Kasa",
+    "name": "Patron",
     "slug": "esnaf-kasa",
     "version": "1.0.0",
     "sdkVersion": "54.0.0",
@@ -9,7 +9,12 @@
       "android"
     ],
     "android": {
-      "package": "com.toco.esnafkasa"
+      "package": "com.toco.patron"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a8a2c977-356c-49f7-8d84-58c4290a3f13"
+      }
     }
   }
 }
